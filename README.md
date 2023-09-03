@@ -21,7 +21,7 @@ AutoAlign improves the performance of entity alignment significantly compared to
 
 
 <p align="center">
-  <img src="/img/overall-framework.pdb", alt="Model Structure" width="800">
+  <img src="/img/overall-framework.pdf", alt="Model Structure" width="800">
   <p align="center"><em>Overview of our proposed AutoAlign method for entity alignment.</em></p>
 </p>
 
