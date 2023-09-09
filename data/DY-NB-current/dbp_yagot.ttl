@@ -1,0 +1,12 @@
+<http://dbpedia.org/resource/Bert_Dainty> <http://dbpedia.org/ontology/managerClub> <http://dbpedia.org/resource/Ayr_United_F.C.> .
+<http://dbpedia.org/resource/Juan_de_Dios_Ibarra> <http://www.w3.org/2000/01/rdf-schema#label> "Juan de Dios Ibarra " .
+<http://dbpedia.org/resource/Fred_Howe> <http://dbpedia.org/ontology/position> <http://dbpedia.org/resource/Forward_(association_football)> .
+<http://dbpedia.org/resource/Matteo_Liviero> <http://xmlns.com/foaf/0.1/gender> "male " .
+<http://dbpedia.org/resource/Terry_Nicholl> <http://dbpedia.org/ontology/team> <http://dbpedia.org/resource/Southend_United_F.C.> .
+<http://dbpedia.org/resource/Bert_Middlemiss> <http://dbpedia.org/ontology/position> <http://dbpedia.org/resource/Forward_(association_football)> .
+<http://dbpedia.org/resource/Cleiton_Mendes_dos_Santos> <http://dbpedia.org/ontology/team> <http://dbpedia.org/resource/Santa_Cruz_Futebol_Clube> .
+<http://dbpedia.org/resource/Frank_Baum_(footballer)> <http://purl.org/dc/elements/1.1/description> "German footballer " .
+<http://dbpedia.org/resource/Luigi_Anaclerio> <http://dbpedia.org/ontology/birthPlace> <http://dbpedia.org/resource/Bari> .
+<http://dbpedia.org/resource/Stuart_Wilkinson_(rugby_league)> <http://www.w3.org/2000/01/rdf-schema#label> "Stuart Wilkinson (rugby league) " .
+<http://dbpedia.org/resource/Terra_Alta,_West_Virginia> <http://dbpedia.org/ontology/isPartOf> <http://dbpedia.org/resource/West_Virginia> .
+<http://dbpedia.org/resource/Erik_Erikson> <http://dbpedia.org/ontology/birthName> "Erik Homburger Erikson " .

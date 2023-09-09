@@ -1,8 +1,10 @@
 # coding: utf-8
-
+import sys
+sys.path.append("/home/wyf/autoAlign/AutoAlign/code")
 from rdflib import Graph
 import random
 import numpy as np
+#import tensorflow as tf
 import tensorflow as tf
 import math
 import datetime as dt
@@ -14,41 +16,48 @@ import os
 DEVICE = "0"
 os.environ["CUDA_VISIBLE_DEVICES"]=DEVICE
 
+#支持多语言
 from kitchen.text.converters import getwriter, to_bytes, to_unicode
 from kitchen.i18n import get_translation_object
 translations = get_translation_object('example')
-_ = translations.ugettext
-b_ = translations.lgettext
+_ = translations.ugettext     #获取翻译后的Unicode字符串
+b_ = translations.lgettext    #获取翻译后的字节字符串
 
 
 ### Combine two KG
+syspath = '/home/wyf/autoAlign/AutoAlign'
 dataset_name = 'yago'
 path = 'DY-NB-current/'
-dataset_name = 'wd'
-path = 'DW-NB/'
-lgd_filename = '../data/'+path+dataset_name+'.ttl'
-dbp_filename = '../data/'+path+'dbp_'+dataset_name+'.ttl'
-predicate_graph = cPickle.load(open('../data/'+path+dataset_name+'_pred_prox_graph.pickle', 'rb'))
-map_file = '../data/'+path+'mapping_'+dataset_name+'.ttl'
+#dataset_name = 'wd'
+#path = 'DW-NB/'
+lgd_filename = syspath+'/data/'+path+dataset_name+'.ttl'
+dbp_filename = syspath+'/data/'+path+'dbp_'+dataset_name+'.ttl'
+predicate_graph = cPickle.load(open(syspath+'/data/'+path+dataset_name+'_pred_prox_graph.pickle', 'rb'))
+map_file = syspath+'/data/'+path+'mapping_'+dataset_name+'.ttl'
+final_normalized = syspath+'/result/'+'final_embeddings_normalized.npy'
+fianl_entity= syspath+'/result/'+'final_embeddings_entity.npy'
+fianl_predicate= syspath+'/result/'+'final_embeddings_predicate.npy'
 
+#合并两个图
 graph = Graph()
 graph.parse(location=lgd_filename, format='nt')
 graph.parse(location=dbp_filename, format='nt')
 
+
 map_graph = Graph()
 map_graph.parse(location=map_file, format='nt')
 
-
+#反转字典
 def invert_dict(d):
     return dict([(v, k) for k, v in d.items()])
 
 entity_label_dict = dict()
-
+#获得实体对应的标签，即实体对应的类型
 for s,p,o in graph:
     if str(p) == 'http://www.w3.org/2000/01/rdf-schema#label':
         entity_label_dict[s] = str(o)
 
-
+#获得实体的三元组数量
 num_subj_triple = dict()
 for s,p,o in graph:
     if num_subj_triple.get(s) == None:
@@ -229,6 +238,7 @@ elif dataset_name == 'wd':
 
     intersection_predicates_uri = intersection_predicates
 
+#清理转换谓词
 def clean_pred(o):
     if dataset_name in o:
         o = dataset_name + '-' + o.split('/')[-1] 
@@ -248,14 +258,18 @@ import rdflib
 import re
 import collections
 
+#字符串最大长度
 literal_len = 10
 
+#判断数据类型
 def dataType(string):
     odp='string'
     patternBIT=re.compile('[01]')
     patternINT=re.compile('[0-9]+')
     patternFLOAT=re.compile('[0-9]+\.[0-9]+')
     patternTEXT=re.compile('[a-zA-Z0-9]+')
+    if patternBIT.match(string):
+        odp= "bit"
     if patternTEXT.match(string):
         odp= "string"
     if patternINT.match(string):
@@ -264,6 +278,7 @@ def dataType(string):
         odp= "float"
     return odp
 
+#获得数据与数据类型，判断累赘，可以直接
 ### Return: data, data_type
 def getRDFData(o):
     if isinstance(o, rdflib.term.URIRef):
@@ -283,7 +298,7 @@ def getRDFData(o):
             data_type = 'integer'
     return o, data_type
     
-
+#获得谓词类型，有点小问题，得看具体数据集
 def getRDFData_predicate(s, o):
     if isinstance(o, rdflib.term.URIRef):
         data_type = "uri"
@@ -307,6 +322,7 @@ def getRDFData_predicate(s, o):
         o = 'dbp-' + o.split('/')[-1]
     return o, data_type
 
+#生成一个表示文本的数字数组 并更新字符词汇表
 def getLiteralArray(o, literal_len, char_vocab):
     literal_object = list()
     for i in range(literal_len):
@@ -333,30 +349,38 @@ entity_vocab = dict()
 entity_dbp_vocab = list()
 entity_dbp_vocab_neg = list()
 entity_lgd_vocab_neg = list()
+
 predicate_vocab = dict()
 predicate_vocab['<NONE>'] = 0
+
 entity_literal_vocab = dict()
 entity_literal_dbp_vocab_neg = list()
 entity_literal_lgd_vocab_neg = list()
+
 data_uri = [] ###[ [[s,p,o,p_trans],[chars],predicate_weight], ... ]
 data_uri_0 = []
 data_literal_0 = []
 data_literal = []
 data_uri_trans = []
 data_literal_trans = []
+
 char_vocab = dict()
 char_vocab['<pad>'] = 0
 #tmp_data = []
 
 pred_weight = dict()
 num_triples = 0
+
+#分析数据获得各种词汇表
 for s, p, o in graph:
 
     num_triples += 1
+    #获得数据类型
     s = getRDFData(s)
     p = getRDFData_predicate(s, p)
     o = getRDFData(o)
     
+    #获得谓词权重
     if pred_weight.get(p[0]) == None:
         pred_weight[p[0]] = 1
     else:
@@ -393,6 +417,7 @@ for s, p, o in graph:
                 entity_dbp_vocab_neg.append(o[0])
             else:
                 entity_lgd_vocab_neg.append(o[0])
+        #生成一个表示文本的数字数组 并更新字符词汇表
         literal_object = getLiteralArray(o, literal_len, char_vocab)
         if str(p[0]) not in intersection_predicates_uri:
             data_uri_0.append([[entity_vocab[s[0]], predicate_vocab[p[0]], entity_vocab[o[0]], 0], literal_object])
@@ -440,7 +465,7 @@ reverse_predicate_vocab = invert_dict(predicate_vocab)
 reverse_char_vocab = invert_dict(char_vocab)
 reverse_entity_literal_vocab = invert_dict(entity_literal_vocab)
 
-#Add predicate weight
+#Add predicate weight 扩展的数据集谓词权重可以换一种方式算
 for i in range(0, len(data_uri)):
     s = reverse_entity_vocab.get(data_uri[i][0][0])
     p = reverse_predicate_vocab.get(data_uri[i][0][1])
@@ -470,6 +495,7 @@ for i in range(0, len(data_literal_trans)):
     s = reverse_entity_vocab.get(data_literal_trans[i][0][0])
     p = reverse_predicate_vocab.get(data_literal_trans[i][0][1])
     data_literal_trans[i].append([(pred_weight.get(p)/float(num_triples))])
+
     
 if len(data_uri_trans) < 100:
     data_uri_trans = data_uri_trans+data_uri_trans
@@ -506,16 +532,16 @@ for t in  predicate_graph:
         range_vocab[predicate_vocab[p]].add(ent_type_vocab[o])
 
 
-print (len(data_uri_trans))
-print (len(data_literal_trans))
-print (len(data_uri))
-print (len(data_literal))
-print (len(data_uri_0))
-print (len(data_literal_0))
-print (len(data_predicate))
+print("data_uri_trans: " + str(len(data_uri_trans)))
+print("data_literal_trans: " + str(len(data_literal_trans)))
+print("data_uri: " + str(len(data_uri)))
+print("data_literal: " + str(len(data_literal)))
+print("data_uri_: " + str(len(data_uri_0)))
+print("data_literal_0: " + str(len(data_literal_0)))
+print("data_predicate: " + str(len(data_predicate)))
 
 
-
+#生成数据批次，包括正样本和负样本
 def getBatch(data, batchSize, current, entityVocab, literal_len, char_vocab):
     hasNext = current+batchSize < len(data)
     
@@ -677,11 +703,12 @@ for line in file_lgd:
 #valid_dataset_list = random.sample(valid_dataset_list, valid_size)
 file_lgd.close()
 
-valid_examples = [entity_vocab[URIRef(k.replace('<','').replace('>',''))] for k,_ in valid_dataset_list] #LGD
-valid_answer = [entity_dbp_vocab.index(entity_vocab[URIRef(k.replace('<','').replace('>',''))]) for _,k in valid_dataset_list] #DBpedia
+valid_examples = [entity_vocab[URIRef(k.replace('<','').replace('>',''))] for k,_ in valid_dataset_list] #LGD实体
+valid_answer = [entity_dbp_vocab.index(entity_vocab[URIRef(k.replace('<','').replace('>',''))]) for _,k in valid_dataset_list] #DBpedia的索引
 
 
-from tensorflow.contrib import rnn
+#from tensorflow.contrib import rnn
+
 
 tfgraph = tf.Graph()
 
@@ -695,6 +722,7 @@ with tfgraph.as_default():
     pos_c = tf.placeholder(tf.int32, [None, literal_len])
     pos_pred_weight = tf.placeholder(tf.float32, [None,1], name='pos_pred_weight')
 
+    #负样本占位符
     neg_h = tf.placeholder(tf.int32, [None])
     neg_t = tf.placeholder(tf.int32, [None])
     neg_r = tf.placeholder(tf.int32, [None])
@@ -702,12 +730,14 @@ with tfgraph.as_default():
     neg_c = tf.placeholder(tf.int32, [None, literal_len])
     neg_pred_weight = tf.placeholder(tf.float32, [None,1], name='neg_pred_weight')
     
+    #数据类型占位符
     type_data = tf.placeholder(tf.int32, [1])
     type_trans = tf.placeholder(tf.int32, [1])
     ######################
     
     # embedding variables #
     ent_embeddings_ori = tf.get_variable(name = "relationship_triple_ent_embedding", shape = [entitySize, hidden_size], initializer = tf.contrib.layers.xavier_initializer(uniform = False))
+    #ent_embeddings_ori = tf.get_variable(name = "relationship_triple_ent_embedding", shape = [entitySize, hidden_size], initializer = tf.keras.initializers.GlorotUniform())
     atr_embeddings_ori = tf.get_variable(name = "attribute_triple_ent_embedding", shape = [entitySize, hidden_size], initializer = tf.contrib.layers.xavier_initializer(uniform = False))
     ent_rel_embeddings = tf.get_variable(name = "proximity_triple_pred_embedding", shape = [predSize, hidden_size], initializer = tf.contrib.layers.xavier_initializer(uniform = False))
     pp_ent_embeddings = tf.get_variable(name = "proximity_triple_ent_embedding", shape = [ppEntSize, hidden_size], initializer = tf.contrib.layers.xavier_initializer(uniform = False))
@@ -736,6 +766,7 @@ with tfgraph.as_default():
     pp_neg_t_e = tf.nn.embedding_lookup(pp_ent_embeddings, neg_t)
     pp_neg_r_e = tf.nn.embedding_lookup(ent_rel_embeddings, neg_r)
     
+    #分别计算正样本和负样本的transe
     pp_pos = tf.reduce_sum(abs(pp_pos_h_e + pp_pos_r_e - pp_pos_t_e), 1, keep_dims = True)
     pp_neg = tf.reduce_sum(abs(pp_neg_h_e + pp_neg_r_e - pp_neg_t_e), 1, keep_dims = True)
     #pp_learning_rate = 0.0001 # LGD/GEO
@@ -819,6 +850,7 @@ with tfgraph.as_default():
     
     at_pos = tf.reduce_sum(abs(at_pos_h_e + at_pos_r_e - pos_c_e_lstm), 1, keep_dims = True)
     at_neg = tf.reduce_sum(abs(at_neg_h_e + at_neg_r_e - neg_c_e_lstm), 1, keep_dims = True)
+    #权重
     at_pos_h_e = tf.multiply(at_pos, pos_pred_weight)
     at_neg_h_e = tf.multiply(at_neg, neg_pred_weight)
     #at_learning_rate = tf.reduce_min(pos_pred_weight)*0.001 # LGD/GEO
@@ -836,6 +868,7 @@ with tfgraph.as_default():
     tr_neg_r_e = tf.multiply(at_neg_r_e, neg_r_e_trans)
     tr_pos = tf.reduce_sum(abs(at_pos_h_e + tr_pos_r_e - pos_c_e_lstm), 1, keep_dims = True)
     tr_neg = tf.reduce_sum(abs(at_neg_h_e + tr_neg_r_e - neg_c_e_lstm), 1, keep_dims = True)
+    #权重
     tr_pos_h_e = tf.multiply(tr_pos, pos_pred_weight)
     tr_neg_h_e = tf.multiply(tr_neg, neg_pred_weight)
     #tr_learning_rate = tf.reduce_min(pos_pred_weight)*0.001 # LGD/GEO
@@ -868,6 +901,7 @@ with tfgraph.as_default():
         valid_embeddings = tf.nn.embedding_lookup(normalized_embeddings, valid_dataset)
         similarity = tf.matmul(valid_embeddings, normalized_embeddings, transpose_b=True)
     
+    #变量初始化
     init = tf.global_variables_initializer()
     #########
 
@@ -991,11 +1025,17 @@ def run(graph, totalEpoch):
         final_embeddings_normalized = normalized_embeddings.eval()
         final_embeddings_entity = ent_embeddings_ori.eval()
         final_embeddings_predicate = ent_rel_embeddings.eval()
+        return final_embeddings_normalized, final_embeddings_entity, final_embeddings_predicate
 
-
+import numpy as np
 
 start_time = dt.datetime.now()
-run(tfgraph, 800) 
+final_embeddings_normalized, final_embeddings_entity, final_embeddings_predicate = run(tfgraph, 800)
+np.save(final_normalized, final_embeddings_normalized)
+np.save(final_entity, final_embeddings_entity)
+np.save(final_predicate, final_embeddings_predicate)
+
+#run(tfgraph, 800) 
 end_time = dt.datetime.now()
 print("Training time took {} seconds to run {} epoch".format((end_time-start_time).total_seconds(), totalEpoch))
 
